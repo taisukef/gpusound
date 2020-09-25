@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>GPU音源 - リズムパターン基本</title>
+</head>
+<body>
+<script id="vs" type="x-shader/x-vertex">
+#version 300 es
+
+#define BPM 120.
+#define A (120. / 8. / BPM)
+
+uniform float sampleRate;
+uniform float offset;
+uniform int ptnkick;
+uniform int ptnsnare;
+uniform int ptnhihat;
+out vec2 gain;
+
+float noise(float t) {
+    return fract(sin(t * 99.0) * 50000.0) * 2.0 - 1.0;
+}
+
+float kick(float t) {
+    return sin(6.283 * 53.0 * t - 10.0 * exp(-50.0 * t)) * exp(-t * 1.3); 
+}
+
+float snare(float t) {
+  return noise(t) * max(0.0, 1.0 - min(0.85, t * 4.25) - (t - 0.25) * 0.3);
+}
+
+float hihat(float t) {
+  return noise(t) * exp(-t * 200.0);
+}
+
+float sequence(int s, float t) {
+  float n = mod(t, A);
+  for (int i = 0; i < 16; i++) {
+    if ((s >> (int(t / A) - i) % 16 & 1) == 1) {
+      break;
+    }
+    n += A;
+  }
+  return n;
+}
+
+vec2 mainSound(float time) {
+  return vec2(
+    0.5 * kick(sequence(ptnkick, time)) +
+    0.3 * snare(sequence(ptnsnare, time)) +
+    0.2 * hihat(sequence(ptnhihat, time)),
+    0.6 * kick(sequence(ptnkick, time)) +
+    0.1 * snare(sequence(ptnsnare, time)) +
+    0.3 * hihat(sequence(ptnhihat, time))
+  );
+}
+
+void main() {
+  float time = (float(gl_VertexID) + offset) / sampleRate;
+  gain = mainSound(time);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+#version 300 es
+void main() {
+}
+</script>
+
+<style>
+body {
+  font-family: sans-serif;
+  text-align: center;
+  background-color: #f8f8f8;
+}
+h1 {
+  font-size: 6vw;
+}
+#divptn {
+  padding: 2vw;
+  background-color: #ddd;
+  margin: 1vw;
+}
+#divptn input[type=checkbox] {
+  width: 3vw;
+  margin: 1vw;
+  transform: scale(1.5);
+}
+button {
+  transform: scale(2);
+  margin: 2vw 3vw;
+}
+</style>
+
+<h1>GPU音源 - リズムパターン基本</h1>
+<div id="divptn"></div>
+<button id="btn">start</button><br>
+<label><input type="checkbox" id="chkrnd">randomize every 5sec</label><br>
+bufsize level <select id="inbufsize">
+  <option>1</option>
+  <option>2</option>
+  <option selected>3</option>
+  <option>4</option>
+  <option>5</option>
+  <option>6</option>
+</select> → latency <span id="spanlatency">-</span>msec<br>
+
+<script type="module">
+
+let ptnhihat = 0x1111;
+let ptnsnare = 0x4000;
+let ptnkick  = 0x2c09;
+
+const getAudio = () => {
+  const AudioContext = window.webkitAudioContext || window.AudioContext;
+  const audio = new AudioContext();
+  return audio;
+};
+
+const startAudio = (audio, buflen, callback) => {
+  try {
+		const node = audio.createScriptProcessor(buflen, 2, 2);
+		const gain = audio.createGain();
+		const sampleRate = audio.sampleRate;
+	
+		const src = audio.createBufferSource();
+		src.buffer = audio.createBuffer(2, buflen, audio.sampleRate);
+		src.connect(node);
+		node.connect(gain);
+		gain.connect(audio.destination);
+	
+    node.onaudioprocess = (data) => {
+      callback(sampleRate, data);
+    };
+		gain.gain.value = 0.2;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+const getGL = () => {
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl2") || canvas.getContext("experimental-webgl2");
+  return gl;
+};
+
+const getProgramGL = (gl) => {
+  const compileShader = (prog, src, type) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src.replace(/^\n/, ""));
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      alert(gl.getShaderInfoLog(sh));
+    } 
+    gl.attachShader(prog, sh);
+    gl.deleteShader(sh);
+  };
+  const program = gl.createProgram();
+  compileShader(program, vs.text, gl.VERTEX_SHADER);
+  compileShader(program, fs.text, gl.FRAGMENT_SHADER);
+  return program;
+};
+
+window.onload = () => {
+  if (document.location.hash.length > 1) {
+    const n = document.location.hash.substring(1).split(",");
+    ptnhihat = parseInt(n[0], 16);
+    ptnsnare = parseInt(n[1], 16);
+    ptnkick = parseInt(n[2], 16);
+  }
+
+  const c = (tag) => document.createElement(tag);
+  const makePtn = (ptn, callback) => {
+    const div = c("div");
+    for (let i = 0; i < 16; i++) {
+      const chk = c("input");
+      chk.type = "checkbox";
+      div.appendChild(chk);
+      chk.checked = ptn & (1 << i);
+      chk.onclick = function() {
+        let n = 0;
+        for (let i = 0; i < this.parentElement.children.length; i++) {
+          const c = this.parentElement.children[i];
+          if (c.checked) {
+            n |= 1 << i;
+          }
+        }
+        this.parentElement.ptn = n;
+        makehash();
+        callback(n);
+      };
+      divptn.appendChild(div);
+    }
+    div.show = function(ptn) {
+      for (let i = 0; i < div.children.length; i++) {
+        const c = div.children[i];
+        c.checked = ptn & (1 << i);
+      }
+      this.ptn = ptn;
+      makehash();
+    };
+    div.ptn = ptn;
+    return div;
+  };
+  const divhihat = makePtn(ptnhihat, (n) => ptnhihat = n);
+  const divsnare = makePtn(ptnsnare, (n) => ptnsnare = n);
+  const divkick = makePtn(ptnkick, (n) => ptnkick = n);
+
+  const makehash = () => {
+    const n = (n) => {
+      if (!n) {
+        n = 0;
+      }
+      const s = "000" + n.toString(16);
+      return s.substring(s.length - 4);
+    };
+    document.location.hash = "#" + n(divhihat.ptn) + "," + n(divsnare.ptn) + "," + n(divkick.ptn);
+  };
+
+  const rnd = (n) => Math.floor(Math.random() * n);
+  setInterval(() => {
+    if (chkrnd.checked) {
+      const n = rnd(3);
+      if (n === 0) {
+        ptnhihat = rnd(0x10000);
+        divhihat.show(ptnhihat);
+      } else if (n === 1) {
+        ptnsnare = rnd(0x10000);
+        divsnare.show(ptnsnare);
+      } else {
+        ptnkick = rnd(0x10000);
+        divkick.show(ptnkick);
+      }
+    }
+  }, 5000);
+};
+
+let audio = null;
+btn.onclick = () => {
+  if (audio) {
+    audio.close();
+    audio = null;
+    btn.textContent = "start";
+    return;
+  } else {
+    btn.textContent = "stop";
+  }
+  const gl = getGL();
+  audio = getAudio();
+
+  let cb = 0;
+  const program = getProgramGL(gl);
+  
+  const bufsize = 256 << parseInt(inbufsize.value);
+  const sampleRate = audio.sampleRate;
+  const latencysec = bufsize / sampleRate;
+  spanlatency.textContent = (latencysec * 1000).toFixed(2);
+  const vbos = [gl.createBuffer(), gl.createBuffer()];
+  gl.transformFeedbackVaryings(program, ['gain'], gl.SEPARATE_ATTRIBS);
+  gl.linkProgram(program);
+  gl.useProgram(program);
+  const fbuf = [new Float32Array(bufsize * 2), new Float32Array(bufsize * 2)];
+  const aryBuffer = new ArrayBuffer(bufsize * (4 * 2));
+  const dataView = new DataView(aryBuffer);
+  const buf = new Float32Array(aryBuffer);
+
+  let offset = 0;
+  startAudio(audio, bufsize, (sampleRate, data) => {
+    gl.uniform1f(gl.getUniformLocation(program, "sampleRate"), sampleRate); 
+    gl.uniform1f(gl.getUniformLocation(program, "offset"), offset);
+    gl.uniform1i(gl.getUniformLocation(program, "ptnkick"), ptnkick);
+    gl.uniform1i(gl.getUniformLocation(program, "ptnsnare"), ptnsnare);
+    gl.uniform1i(gl.getUniformLocation(program, "ptnhihat"), ptnhihat);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbos[0]);
+    gl.bufferData(gl.ARRAY_BUFFER, fbuf[0], gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbos[1]);
+    gl.bufferData(gl.ARRAY_BUFFER, fbuf[1], gl.STATIC_DRAW);
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, vbos[0]);
+    gl.enable(gl.RASTERIZER_DISCARD);
+    gl.beginTransformFeedback(gl.POINTS);
+    gl.drawArrays(gl.POINTS, 0, bufsize);
+    gl.endTransformFeedback();
+    gl.disable(gl.RASTERIZER_DISCARD);
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbos[0]);
+    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, dataView);
+    const outl = data.outputBuffer.getChannelData(0);
+    const outr = data.outputBuffer.getChannelData(1);
+    for (let i = 0; i < bufsize; i++) {
+      outl[i] = buf[i * 2];
+      outr[i] = buf[i * 2 + 1];
+    }
+    offset += bufsize;
+  });
+};
+</script>
+</body>
+</html>

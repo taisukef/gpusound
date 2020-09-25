@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body>
+
+<button id="btn">start</button>
+<script type="module">
+
+const startSound = (buflen) => {
+  if (!buflen)
+    buflen = 1024;
+  try {
+    const AudioContext = window.webkitAudioContext || window.AudioContext;
+    const audio = new AudioContext();
+		if (!audio)
+			return null;
+		const node = audio.createScriptProcessor(buflen, 2, 2);
+		const gain = audio.createGain();
+		const sampleRate = audio.sampleRate;
+	
+		const src = audio.createBufferSource();
+		src.buffer = audio.createBuffer(2, buflen, audio.sampleRate);
+		src.connect(node);
+		node.connect(gain);
+		gain.connect(audio.destination);
+	
+		let counter = 0;
+		const snd = { freq: 440 };
+		node.onaudioprocess = (data) => {
+      const period = snd.freq / sampleRate;
+			const outl = data.outputBuffer.getChannelData(0);
+			const outr = data.outputBuffer.getChannelData(1);
+			const procsize = data.inputBuffer.length;
+			for (let i = 0; i < procsize; i++){
+				outl[i] = outr[i] = counter > 0 ? 1 : -1; // square
+				// outl[i] = outr[i] = counter; // triangle
+				counter += period;
+				if (counter >= .5) {
+          counter -= 1.0;
+        }
+			}
+		};
+		gain.gain.value = 0.2;
+		snd.gain = gain.gain;
+		snd.audio = audio;
+		return snd;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+btn.onclick = () => {
+  startSound(1024);
+};
+</script>
+</body>
+</html>
+
