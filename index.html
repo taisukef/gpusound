@@ -132,7 +132,7 @@ const startAudio = (audio, buflen, callback) => {
     node.onaudioprocess = (data) => {
       callback(sampleRate, data);
     };
-		gain.gain.value = 0.2;
+		gain.gain.value = 1.;
 	} catch (e) {
 		console.log(e);
 	}
