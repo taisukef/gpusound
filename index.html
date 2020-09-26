@@ -119,8 +119,9 @@ const getAudio = () => {
 const startAudio = (audio, buflen, callback) => {
   try {
 		const node = audio.createScriptProcessor(buflen, 2, 2);
-		const gain = audio.createGain();
-		const sampleRate = audio.sampleRate;
+    const gain = audio.createGain();
+    const sampleRate = audio.sampleRate; // depends device settings 44.1Hz / 48kHz / 96kHz
+    console.log("sampleRate", sampleRate);
 	
 		const src = audio.createBufferSource();
 		src.buffer = audio.createBuffer(2, buflen, audio.sampleRate);
