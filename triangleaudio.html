@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+	<title>FC音源テスト / FC sound test</title>
+</head>
+<body>
+<style>
+body {
+	--bg-color: #ECE3CF;
+	--main-color: #611E23;
+	background-color: var(--bg-color);
+	color: var(--main-color);
+	text-align: center;
+	font-family: sans-serif;
+}
+#main {
+	text-align: left;
+	display: inline-block;
+	margin: 1em;
+	padding: 1em;
+	font-size: 150%;
+	border: .5vw solid var(--main-color);
+}
+a {
+	color: var(--main-color) !important;
+}
+</style>
+
+<h1>FC音源テスト</h1>
+<div id="main">
+	<button id="btn">start</button><br>
+	sampleRate: <span id=sampleRate>-</span>kHz<br>
+	<br>
+	<input type="checkbox" id="chknoise" checked>noise on<br>
+	<input type="checkbox" id="chkShortFreq" checked>shortFreq<br>
+	noise no: <input type="number" id="inNoiseNum"><br>
+	<br>
+	<input type="checkbox" id="chktriangle" checked>triangle on<br>
+	triangle freq: <input type="number" id="inTriFreq"><br>
+
+</div>
+
+<script type="module">
+
+const startSound = (buflen) => {
+  if (!buflen)
+    buflen = 2024;
+  try {
+    const AudioContext = window.webkitAudioContext || window.AudioContext;
+    const audio = new AudioContext();
+		if (!audio)
+			return null;
+		const sampleRate = audio.sampleRate;
+		console.log("sampleRate", sampleRate);
+		if (sampleRate > 48000) {
+			buflen *= (sampleRate / 48000) >> 0;
+		}
+		const node = audio.createScriptProcessor(buflen, 0, 1);
+		const gain = audio.createGain();
+	
+		const src = audio.createBufferSource();
+		src.buffer = audio.createBuffer(2, buflen, audio.sampleRate);
+		src.connect(node);
+		node.connect(gain);
+		gain.connect(audio.destination);
+		
+		// 参考
+		// https://dic.nicovideo.jp/a/fc%E9%9F%B3%E6%BA%90
+
+		// noise
+		let noisereg = 0x8000;
+		const noiseptn = [2, 4, 8, 0x10, 0x20, 0x30, 0x40, 0x50, 0x65, 0x7f, 0xbe, 0xfe, 0x17d, 0x1fc, 0x3f9, 0x7f2];
+		let nnoise = 7;
+		inNoiseNum.value = nnoise;
+		let noisefreq = 1789772.5 / noiseptn[nnoise];
+		let noiseperiod = noisefreq / sampleRate;
+		inNoiseNum.onchange = function() {
+			const n = parseInt(this.value);
+			if (!isNaN(n)) { //  && n >= 0 && n <= 15) {
+				nnoise = n & 0xf;
+				noisefreq = 1789772.5 / noiseptn[nnoise];
+				noiseperiod = noisefreq / sampleRate;
+				noisecnt = 0.;
+				this.value = nnoise;
+			}
+		}
+		let shortFreq = 1;
+		let noisecnt = 0.;
+
+		// triangle
+		let tricnt = 0.;
+		const triptn = [ 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; // triangle ch C
+		let trifreq = 55;
+		let triperiod = trifreq / sampleRate;
+		inTriFreq.value = trifreq;
+		inTriFreq.onchange = function() {
+			const n = parseFloat(inTriFreq.value);
+			if (!isNaN(n)) {
+				trifreq = n;
+				triperiod = trifreq / sampleRate;
+				this.value = n;
+			}
+		};
+		console.log(trifreq, triperiod);
+
+		//const ptn = [ 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+		//const ptn = [ 15, 14, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+		node.onaudioprocess = (data) => {
+			const outl = data.outputBuffer.getChannelData(0);
+			// const outr = data.outputBuffer.getChannelData(1);
+			const nch = data.outputBuffer.length;
+			for (let i = 0; i < nch; i++) {
+				let out = 0.;
+				
+				if (chktriangle.checked) {
+					out += ((triptn[(tricnt * triptn.length) >> 0] / 15) * 2 - 1) * .1;
+				}
+				tricnt += triperiod;
+				if (tricnt >= 1.0) {
+					tricnt -= 1.0;
+        }
+
+				if (chknoise.checked) {
+					out += ((noisereg & 1) * 2 - 1) * .1
+				}
+				noisecnt += noiseperiod;
+				if (noisecnt >= 1.) {
+					noisecnt -= 1.;
+					noisereg >>= 1;
+					shortFreq = chkShortFreq.checked;
+					noisereg |= ((noisereg ^ (noisereg >> (shortFreq ? 6 : 1))) & 1) << 15;
+					noisereg &= 0xffff;
+				}
+
+				outl[i] = out * .1;
+			}
+		};
+		gain.gain.value = 1.;
+		return audio;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+let audio = null;
+btn.onclick = () => {
+	if (audio) {
+		audio.close();
+		audio = null;
+		btn.textContent = "start";
+	} else {
+		audio = startSound(1024);
+		sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1);
+		btn.textContent = "stop";
+	}
+};
+</script>
+
+<div id="src">
+	<div>App: <a href=https://fukuno.jig.jp/2986>FC音源テスト (FC sound test)</a> <a href=https://twitter.com/taisukef>@taisukef</a></div>
+</div>
+</body>
+</html>
+
