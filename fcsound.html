@@ -28,7 +28,7 @@ a {
 <h1>FC音源テスト</h1>
 <div id="main">
 	<button id="btn">start</button><br>
-	sampleRate: <span id=sampleRate>-</span>kHz<br>
+	sampleRate: <span id=sampleRate>-</span><br>
 	<br>
 	<input type="checkbox" id="chknoise" checked>noise on<br>
 	<input type="checkbox" id="chkShortFreq" checked>shortFreq<br>
@@ -54,11 +54,12 @@ const startSound = (buflen) => {
 		if (sampleRate > 48000) {
 			buflen *= (sampleRate / 48000) >> 0;
 		}
-		const node = audio.createScriptProcessor(buflen, 0, 1);
+		const nch = 2;
+		const node = audio.createScriptProcessor(buflen, 0, nch);
 		const gain = audio.createGain();
 	
 		const src = audio.createBufferSource();
-		src.buffer = audio.createBuffer(2, buflen, audio.sampleRate);
+		src.buffer = audio.createBuffer(nch, buflen, audio.sampleRate);
 		src.connect(node);
 		node.connect(gain);
 		gain.connect(audio.destination);
@@ -150,8 +151,12 @@ btn.onclick = () => {
 		btn.textContent = "start";
 	} else {
 		audio = startSound(1024);
-		sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1);
-		btn.textContent = "stop";
+		if (audio) {
+			sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1) + "kHz";
+			btn.textContent = "stop";
+		} else {
+			sampleRate.textContent = "can't use Audio";
+		}
 	}
 };
 </script>
