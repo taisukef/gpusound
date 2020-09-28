@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+	<title>WhiteNoise</title>
+</head>
+<body>
+<style>
+body {
+	--bg-color: lightGray;
+	--main-color: black;
+	background-color: var(--bg-color);
+	color: var(--main-color);
+	text-align: center;
+	font-family: sans-serif;
+}
+#main {
+	x-text-align: left;
+	display: inline-block;
+	margin: 1em;
+	padding: 1em;
+	font-size: 100%;
+	x-border: .5vw solid var(--main-color);
+}
+a {
+	color: var(--main-color) !important;
+}
+</style>
+
+<h1>WhiteNoise</h1>
+<div id="main">
+	<button id="btn">start</button><br><br>
+	sampleRate: <span id=sampleRate>-</span><br>
+	<br>
+	<label><input type="checkbox" id="useworklet" checked>use AudioWorkletProcessor</label><br>
+</div>
+
+<script type="module">
+
+const startSound = async () => {
+  try {
+    const AudioContext = window.webkitAudioContext || window.AudioContext;
+    const audio = new AudioContext();
+		if (!audio)
+			return null;
+		const sampleRate = audio.sampleRate;
+		console.log("sampleRate", sampleRate);
+		const audioContext = new AudioContext();
+		const pname = "WhiteNoiseProcessor";
+		await audioContext.audioWorklet.addModule(pname + ".js");
+		const node1 = new AudioWorkletNode(audioContext, pname);
+		node1.connect(audioContext.destination);
+		audio.stop = () => {
+			node1.disconnect();
+		};
+		return audio;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+let audio = null;
+btn.onclick = async () => {
+	if (audio) {
+		audio.stop();
+		audio.close();
+		audio = null;
+		btn.textContent = "start";
+	} else {
+		if (useworklet.checked) {
+			audio = await startSound();
+		}
+		if (audio) {
+			sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1) + "kHz";
+			btn.textContent = "stop";
+		} else {
+			useworklet.checked = false;
+			audio = startSoundOld();
+			audio.stop = () => {};
+			if (audio) {
+				sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1) + "kHz";
+				btn.textContent = "stop";
+			} else {
+				sampleRate.textContent = "can't use Audio";
+			}
+		}
+	}
+};
+
+// old
+
+const startSoundOld = () => {
+	let buflen = 2048;
+	try {
+    const AudioContext = window.webkitAudioContext || window.AudioContext;
+    const audio = new AudioContext();
+		if (!audio)
+			return null;
+		const sampleRate = audio.sampleRate;
+		console.log("sampleRate", sampleRate);
+		if (sampleRate > 48000) {
+			buflen *= (sampleRate / 48000) >> 0;
+		}
+		const nch = 2;
+		const node = audio.createScriptProcessor(buflen, 0, nch);
+		const gain = audio.createGain();
+	
+		const src = audio.createBufferSource();
+		src.buffer = audio.createBuffer(nch, buflen, audio.sampleRate);
+		src.connect(node);
+		node.connect(gain);
+		gain.connect(audio.destination);
+		
+		node.onaudioprocess = (data) => {
+			const outl = data.outputBuffer.getChannelData(0);
+			const outr = data.outputBuffer.getChannelData(1);
+			const nch = data.outputBuffer.length;
+			for (let i = 0; i < nch; i++) {
+				outl[i] = outr[i] = (Math.random() * 2 - 1) * .2;
+			}
+		};
+		gain.gain.value = 1.;
+		return audio;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+</script>
+
+<div id="src">
+	<div>App: <a href=https://fukuno.jig.jp/2987>WhiteNoise</a> <a href=https://twitter.com/taisukef>@taisukef</a></div>
+</div>
+</body>
+</html>
+
