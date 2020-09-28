@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+	<title>AudioWorkletProcessor test</title>
+</head>
+<body>
+<style>
+body {
+	--bg-color: #ECE3CF;
+	--main-color: #611E23;
+	background-color: var(--bg-color);
+	color: var(--main-color);
+	text-align: center;
+	font-family: sans-serif;
+}
+#main {
+	text-align: left;
+	display: inline-block;
+	margin: 1em;
+	padding: 1em;
+	font-size: 100%;
+	border: .5vw solid var(--main-color);
+}
+a {
+	color: var(--main-color) !important;
+}
+</style>
+
+<h1>AudioWorkletProcessor test</h1>
+<div id="main">
+	<select id="processor">
+		<option selected>WhiteNoiseProcessor</option>
+		<option>SineWaveProcessor</option>
+	</select>
+	<br><br>
+	<button id="btn">start</button><br>
+	sampleRate: <span id=sampleRate>-</span><br>
+</div>
+
+<script type="module">
+
+const startSound = async () => {
+  try {
+    const AudioContext = window.webkitAudioContext || window.AudioContext;
+    const audio = new AudioContext();
+		if (!audio)
+			return null;
+		const sampleRate = audio.sampleRate;
+		console.log("sampleRate", sampleRate);
+		const audioContext = new AudioContext();
+		// const pname = "SineWaveProcessor";
+		const pname = processor.value;
+		await audioContext.audioWorklet.addModule(pname + ".js");
+		const node1 = new AudioWorkletNode(audioContext, pname);
+		node1.connect(audioContext.destination);
+		audio.stop = () => {
+			node1.disconnect();
+		};
+		return audio;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+let audio = null;
+btn.onclick = async () => {
+	if (audio) {
+		audio.stop();
+		audio.close();
+		audio = null;
+		btn.textContent = "start";
+	} else {
+		audio = await startSound(1024);
+		if (audio) {
+			sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1) + "kHz";
+			btn.textContent = "stop";
+		} else {
+			sampleRate.textContent = "can't use Audio";
+		}
+	}
+};
+</script>
+
+<div id="src">
+	<div>App: <a href=https://fukuno.jig.jp/2986>FC音源テスト (FC sound test)</a> <a href=https://twitter.com/taisukef>@taisukef</a></div>
+	<div>Reference: <a href=https://dic.nicovideo.jp/a/fc%E9%9F%B3%E6%BA%90>FC音源とは (ファミコンオンゲンとは) [単語記事] - ニコニコ大百科</a></div>
+</div>
+</body>
+</html>
+
