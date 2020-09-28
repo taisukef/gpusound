@@ -107,7 +107,7 @@ const startSound = (buflen) => {
 		//const ptn = [ 15, 14, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 		node.onaudioprocess = (data) => {
 			const outl = data.outputBuffer.getChannelData(0);
-			// const outr = data.outputBuffer.getChannelData(1);
+			const outr = data.outputBuffer.getChannelData(1);
 			const nch = data.outputBuffer.length;
 			for (let i = 0; i < nch; i++) {
 				let out = 0.;
@@ -132,7 +132,7 @@ const startSound = (buflen) => {
 					noisereg &= 0xffff;
 				}
 
-				outl[i] = out * .1;
+				outl[i] = outr[i] = out * .1;
 			}
 		};
 		gain.gain.value = 1.;
