@@ -35,6 +35,19 @@ a {
 
 <script type="module">
 
+// https://ics.media/entry/11292/
+const rnorm = () => { // 0.5が中央地
+	for (;;) {
+		const r1 = Math.random();
+		const r2 = Math.random();
+		const n = Math.sqrt(-2.0 * Math.log(r1)) * Math.sin(2.0 * Math.PI * r2);
+		const r = (n + 3) / 6;
+		if (r >= 0 && r < 1.) {
+			return r;
+		}
+	}
+}
+
 const startSound = async () => {
   try {
     const AudioContext = window.webkitAudioContext || window.AudioContext;
@@ -115,7 +128,8 @@ const startSoundOld = () => {
 			const outr = data.outputBuffer.getChannelData(1);
 			const nch = data.outputBuffer.length;
 			for (let i = 0; i < nch; i++) {
-				outl[i] = outr[i] = (Math.random() * 2 - 1) * .2;
+				//outl[i] = outr[i] = (Math.random() * 2 - 1) * .2;
+				outl[i] = outr[i] = (rnorm() * 2 - 1) * .2;
 			}
 		};
 		gain.gain.value = 1.;
@@ -130,6 +144,7 @@ const startSoundOld = () => {
 
 <div id="src">
 	<div>App: <a href=https://fukuno.jig.jp/2987>WhiteNoise</a> <a href=https://twitter.com/taisukef>@taisukef</a></div>
+	<div>Lib: <a href=https://ics.media/entry/11292/>JavaScript開発に役立つ重要なランダムの数式まとめ - ICS MEDIA</a></div>
 </div>
 </body>
 </html>
