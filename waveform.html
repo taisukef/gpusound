@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+	<title>波形量子化聴き比べアプリ / waveform sound test</title>
+</head>
+<body>
+<style>
+body {
+	--bg-color: white;
+	--main-color: #444;
+	background-color: var(--bg-color);
+	color: var(--main-color);
+	text-align: center;
+	font-family: sans-serif;
+}
+#main {
+	text-align: left;
+	display: inline-block;
+	margin: 1em;
+	padding: 1em;
+	font-size: 150%;
+	border: .5vw solid var(--main-color);
+}
+a {
+	color: var(--main-color) !important;
+}
+</style>
+
+<h1>波形量子化聴き比べアプリ</h1>
+<div id="main">
+	<button id="btn">start</button><br>
+	sampleRate: <span id=sampleRate>-</span><br>
+	<br>
+<!--
+	<select id=selfreq>
+		<option value=100>220Hz</option>
+		<option value=1100 selected>2.2kHz</option>
+		<option value=12000>22kHz</option>
+	</select><br>
+-->
+	<input type="range" value="440" min="100" max="2400" id=rangefreq style="width: 32em"><br>freq: <span id=textfreq></span>Hz<br>
+	<span id="info"></span><br>
+	<label><input type="radio" name="waveform" id="radiosine">sine</label>
+	<label><input type="radio" name="waveform" id="radiosine248">sine(overtones)</label>
+	<label><input type="radio" name="waveform" id="radiosquare" checked>square</label>
+	<br>
+	<label><input type="checkbox" id=quantize>quantize</label><br>
+
+</div>
+
+<script type="module">
+
+const waveformSine = (angle) => {
+	return Math.sin(angle);
+};
+const waveformSquare = (angle) => {
+	const w = .4;
+	return angle > Math.PI ? -w : w;
+};
+const waveformSine248 = (angle) => {
+	return (
+		Math.sin(angle) * .5
+		+ Math.sin(angle * 2) * .9
+		+ Math.sin(angle * 4) * .8
+		+ Math.sin(angle * 8) * .7
+		+ Math.sin(angle * 16) * .6
+	) / 5;
+};
+
+const startSound = (buflen) => {
+  if (!buflen)
+    buflen = 2048;
+  try {
+    const AudioContext = window.webkitAudioContext || window.AudioContext;
+    const audio = new AudioContext();
+		if (!audio)
+			return null;
+		const sampleRate = audio.sampleRate;
+		console.log("sampleRate", sampleRate);
+		if (sampleRate > 48000) {
+			buflen *= (sampleRate / 48000) >> 0;
+		}
+		const nch = 2;
+		const node = audio.createScriptProcessor(buflen, 0, nch);
+		const gain = audio.createGain();
+	
+		const src = audio.createBufferSource();
+		src.buffer = audio.createBuffer(nch, buflen, audio.sampleRate);
+		src.connect(node);
+		node.connect(gain);
+		gain.connect(audio.destination);
+		
+		let th = 0.;
+		let freq;
+		let period;
+
+		const setFreq = (f) => {
+			freq = f;
+			period = freq / sampleRate * (Math.PI * 2);
+			textfreq.textContent = freq;
+			const freq2 = sampleRate / (parseInt(sampleRate / freq));
+			info.textContent = (sampleRate / freq).toFixed(2) + "samples" + (radiosquare.checked || quantize.checked ? ", " + freq2.toFixed(3) + "Hz (+" + ((freq2 - freq) / freq * 100).toFixed(2) + "%)" : "");
+		};
+		setFreq(rangefreq.value);
+		radiosine.onchange = radiosine248.onchange = radiosquare.onchange = quantize.onchange = () => {
+			setFreq(rangefreq.value);
+		};
+
+
+		/*
+		selfreq.onchange = () => {
+			freq = parseInt(selfreq.value);
+			period = freq / sampleRate * (Math.PI * 2);
+			textfreq.value = freq;
+		};
+		*/
+		rangefreq.onchange = () => {
+			setFreq(rangefreq.value);
+		};
+
+		node.onaudioprocess = (data) => {
+			const outl = data.outputBuffer.getChannelData(0);
+			const outr = data.outputBuffer.getChannelData(1);
+			const len = outl.length;
+			for (let i = 0; i < len; i++) {
+				let out = 0.;
+				
+				if (radiosine.checked) {
+					out += waveformSine(th);
+				}
+				if (radiosine248.checked) {
+					out += waveformSine248(th);
+				}
+				
+				if (radiosquare.checked) {
+					out += waveformSquare(th);
+				}
+				//console.log(th, out);
+				th += period;
+				if (th >= 2 * Math.PI) {
+					if (quantize.checked) {
+						th = 0;
+					} else {
+						th -= 2 * Math.PI;
+					}
+        }
+
+				outl[i] = outr[i] = out * .1;
+			}
+		};
+		gain.gain.value = 1.;
+		return audio;
+	} catch (e) {
+		console.log(e);
+	}
+	return null;
+}
+
+let audio = null;
+btn.onclick = () => {
+	if (audio) {
+		audio.close();
+		audio = null;
+		btn.textContent = "start";
+	} else {
+		audio = startSound(1024);
+		if (audio) {
+			sampleRate.textContent = ((audio.sampleRate) / 1000).toFixed(1) + "kHz";
+			btn.textContent = "stop";
+		} else {
+			sampleRate.textContent = "can't use Audio";
+		}
+	}
+};
+</script>
+
+<div id="src">
+	<div>App: <a href=https://fukuno.jig.jp/2992>CDにラの矩形波は鳴らせない</a></div>
+	<div>Related: <a href=https://fukuno.jig.jp/2986>FC音源テスト (FC sound test)</a></div>
+</div>
+</body>
+</html>
+
